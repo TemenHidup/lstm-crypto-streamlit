@@ -1069,6 +1069,20 @@ elif page == 'Comparison':
 
     with col1:
         coin = st.selectbox('Choose Coin', list(coin_map.keys()), key='coc')
+        if "last_coin" not in st.session_state or st.session_state.last_coin != coin:
+            keys_to_clear = [
+                "model", "scaler", "meta",
+                "X_train", "y_train",
+                "X_val", "y_val",
+                "X_test", "y_test",
+                "window", "horizon",
+                "fig1", "fig2"
+            ]
+        
+            for k in keys_to_clear:
+                st.session_state[k] = None
+        
+            st.session_state.last_coin = coin
         forecast_days_opt = st.slider('Forecast days for comparison', min_value=1, max_value=14, value=7, step=1)
         run_btn = st.button('Compare Models')
 
@@ -1440,6 +1454,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
