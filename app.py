@@ -453,7 +453,7 @@ def load_model_files(coin, optimizer):
     scaler_path = f"saved_models/{coin}_scaler.pkl"
     meta_path   = f"saved_models/{coin}_meta.json"
 
-    model = load_model(model_path)
+    model = load_model(model_path,compile=False)
 
     with open(scaler_path, 'rb') as f:
         scaler = pickle.load(f)
@@ -1362,3 +1362,4 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
