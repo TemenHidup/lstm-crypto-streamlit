@@ -448,21 +448,81 @@ def save_model_files(model, scaler, coin_short_name, optimizer_name, window, hor
     return model_path, scaler_path, meta_path
 
 
-def load_model_files(coin, optimizer):
-    model_path = f"saved_models/{coin}_{optimizer}.keras"
-    scaler_path = f"saved_models/{coin}_scaler.pkl"
-    meta_path   = f"saved_models/{coin}_meta.json"
+# def load_model_files(coin, optimizer):
+#     model_path = f"saved_models/{coin}_{optimizer}.keras"
+#     scaler_path = f"saved_models/{coin}_scaler.pkl"
+#     meta_path   = f"saved_models/{coin}_meta.json"
 
-    model = load_model(model_path,compile=False)
+#     model = load_model(model_path,compile=False)
 
-    with open(scaler_path, 'rb') as f:
+#     with open(scaler_path, 'rb') as f:
+#         scaler = pickle.load(f)
+
+#     with open(meta_path, 'r') as f:
+#         meta = json.load(f)
+
+#     return model, scaler, meta
+
+
+def load_model_files(short, optimizer):
+    
+
+    
+    model_path = f"saved_models/{short}_{optimizer}.keras"
+    scaler_path = f"saved_models/{short}_scaler.pkl"
+    meta_path   = f"saved_models/{short}_meta.json"
+
+    # ============================
+    # FILE EXISTENCE CHECK
+    # ============================
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found: {model_path}")
+
+    if not os.path.exists(scaler_path):
+        raise FileNotFoundError(f"Scaler not found: {scaler_path}")
+
+    if not os.path.exists(meta_path):
+        raise FileNotFoundError(f"Meta file not found: {meta_path}")
+
+    # ============================
+    # LOAD SCALER FIRST
+    # ============================
+    with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
 
-    with open(meta_path, 'r') as f:
+    # ============================
+    # LOAD META FILE
+    # ============================
+    with open(meta_path, "r") as f:
         meta = json.load(f)
 
-    return model, scaler, meta
+    window  = meta.get("window", 60)
+    horizon = meta.get("horizon", 1)
 
+    # ============================
+    # BUILD DUMMY INPUT FOR SAFE LOAD
+    # (Keras 3 sometimes fails unless
+    #   model.build(input_shape) called manually)
+    # ============================
+    dummy_input = tf.zeros((1, window, 5))
+
+    # ============================
+    # LOAD MODEL (export format friendly)
+    # ============================
+    try:
+        model = load_model(
+            model_path,
+            compile=False,       # IMPORTANT to avoid optimizer issues
+            safe_mode=False      # allow full deserialization
+        )
+
+        # Force-build model to avoid LSTM name_scope error
+        model.predict(dummy_input)
+
+    except Exception as e:
+        raise RuntimeError(f"Error loading model: {e}")
+
+    return model, scaler, meta
 
 
 # ============================================
@@ -1320,6 +1380,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
