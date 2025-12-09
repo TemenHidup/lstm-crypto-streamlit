@@ -1065,348 +1065,322 @@ elif page == 'Comparison':
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 2])
+    col1, col2 = st.columns([1,2])
 
-    # ===================== LEFT PANEL =====================
+    # ==========================
+    # LEFT PANEL
+    # ==========================
     with col1:
+
         coin = st.selectbox('Choose Coin', list(coin_map.keys()), key='coc')
 
-        # RESET SEMUA STATE KALAU COIN GANTI
+        # Reset EVERYTHING when coin changes
         if "last_coin" not in st.session_state or st.session_state.last_coin != coin:
             keys_to_clear = [
-                "model", "scaler", "meta",
-                "X_train", "y_train",
-                "X_val", "y_val",
-                "X_test", "y_test",
-                "window", "horizon",
-                "fig1", "fig2",
-                "opt_results"
+                "model","scaler","meta",
+                "X_train","y_train","X_val","y_val","X_test","y_test",
+                "window","horizon",
+                "fig1","fig2",
+                "opt_results",
+                "comparison_done"
             ]
             for k in keys_to_clear:
                 st.session_state.pop(k, None)
 
             st.session_state.last_coin = coin
 
-        forecast_days_opt = st.slider(
-            'Forecast days for comparison',
-            min_value=1, max_value=14, value=7, step=1
-        )
+        forecast_days_opt = st.slider('Forecast days for comparison',
+                                      min_value=1, max_value=14, value=7, step=1)
+
         run_btn = st.button('Compare Models')
 
-        st.markdown('</div>', unsafe_allow_html=True)
 
-    # ===================== RIGHT PANEL =====================
+    # ==========================
+    # RIGHT PANEL (INFO)
+    # ==========================
     with col2:
         st.write("Tips:")
-        st.write("This will compare SGD, Adam, and RMSProp on the same pretrained setup.")
-        st.write("Useful for checking which optimizer performs best.")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.write("This compares pretrained SGD, Adam, RMSProp models.")
+        st.write("The comparison is purely prediction-based, not retraining.")
 
-        if run_btn:
-            st.session_state.opt_results = {}
+    # =====================================================================
+    # RUN BUTTON PRESSED → LOAD MODELS + PREPARE PREDICTIONS
+    # =====================================================================
+    if run_btn:
 
-            df = download_data(coin_map[coin])
+        # Clear old states
+        for key in ["opt_results", "comparison_done"]:
+            st.session_state.pop(key, None)
 
-            # ---- Preprocess fresh for optimizer comparison (horizon=1) ----
-            X_train, y_train, X_val, y_val, X_test, y_test, scaler = prepare_lstm_data(
-                df, window=60, horizon=1
-            )
+        df = download_data(coin_map[coin])
 
-            # store into session_state (dipakai untuk plotting bawah)
-            st.session_state.X_train = X_train
-            st.session_state.y_train = y_train
-            st.session_state.X_val = X_val
-            st.session_state.y_val = y_val
-            st.session_state.X_test = X_test
-            st.session_state.y_test = y_test
-            st.session_state.scaler = scaler
+        # Preprocess fresh (horizon=1)
+        X_train, y_train, X_val, y_val, X_test, y_test, scaler = \
+            prepare_lstm_data(df, window=60, horizon=1)
 
-            st.success("Preprocessed for optimizer comparison (horizon=1).")
+        st.session_state.X_train = X_train
+        st.session_state.y_train = y_train
+        st.session_state.X_val   = X_val
+        st.session_state.y_val   = y_val
+        st.session_state.X_test  = X_test
+        st.session_state.y_test  = y_test
+        st.session_state.scaler  = scaler
 
-            features = ['Open', 'High', 'Low', 'Close', 'Volume']
-            data = df[features].values.astype(float)
-            scaled_all = scaler.transform(data)
+        optimizers = ["SGD", "Adam", "RMSProp"]
+        short = coin_short[coin]
 
-            n = len(scaled_all)
-            train_end = int(n * 0.70)
-            val_end = int(n * 0.85)
+        loaded = {}
+        missing = []
 
-            train_scaled = scaled_all[:train_end]
-            val_scaled = scaled_all[train_end:val_end]
-            test_scaled = scaled_all[val_end:]
+        prog = st.progress(0)
+        status = st.empty()
 
-            test_input = np.concatenate([val_scaled[-60:], test_scaled], axis=0)
-            reference_row_test = test_input[60 - 1]
+        # ============= LOAD PRETRAINED MODELS =============
+        for i, opt_name in enumerate(optimizers):
 
-            optimizers = ["SGD", "Adam", "RMSProp"]
-            loaded = {}
-            missing = []
+            base = f"{short}_{opt_name}"
+            model_path  = f"saved_models/{base}.keras"
+            scaler_path = f"saved_models/{short}_scaler.pkl"
+            meta_path   = f"saved_models/{short}_meta.json"
 
-            prog = st.progress(0)
-            status = st.empty()
+            if not (os.path.exists(model_path) and
+                    os.path.exists(scaler_path) and
+                    os.path.exists(meta_path)):
+                missing.append(base)
+                prog.progress((i+1)/3)
+                continue
 
-            # ---------------- LOAD SEMUA MODEL PRETRAINED ----------------
-            for i, opt_name in enumerate(optimizers):
-                short = coin_short[coin]
-                base = f"{short}_{opt_name}"
+            try:
+                # Load model safely
+                m = load_model(model_path, compile=False)
 
-                model_path = f"saved_models/{base}.keras"
-                scaler_path = f"saved_models/{short}_scaler.pkl"
-                meta_path = f"saved_models/{short}_meta.json"
+                # Load meta
+                with open(meta_path, "r") as f:
+                    meta = json.load(f)
 
-                if not (os.path.exists(model_path) and
-                        os.path.exists(scaler_path) and
-                        os.path.exists(meta_path)):
-                    missing.append(base)
-                    prog.progress((i + 1) / len(optimizers))
-                    continue
+                # FORCE BUILD keras model
+                dummy = tf.zeros((1, meta["window"], 5))
+                m.predict(dummy)
 
-                try:
-                    # LOAD MODEL
-                    m = load_model(model_path, compile=False)
+                # Load scaler
+                with open(scaler_path, "rb") as f:
+                    sc_loaded = pickle.load(f)
 
-                    # FORCE BUILD (anti error name_scope / pop)
-                    with open(meta_path, "r") as f:
-                        meta_preview = json.load(f)
-                    dummy = tf.zeros((1, meta_preview["window"], 5))
-                    m.predict(dummy)
+                loaded[opt_name] = {
+                    "model": m,
+                    "meta": meta,
+                    "scaler": sc_loaded
+                }
 
-                    # LOAD SCALER + META
-                    with open(scaler_path, "rb") as f:
-                        sc_loaded = pickle.load(f)
-                    with open(meta_path, "r") as f:
-                        meta_loaded = json.load(f)
+            except Exception as e:
+                st.error(f"Failed to load {base}: {e}")
 
-                    loaded[opt_name] = {
-                        "model": m,
-                        "scaler": sc_loaded,
-                        "meta": meta_loaded
-                    }
+            prog.progress((i+1)/3)
 
-                except Exception as e:
-                    st.error(f"Failed to load {base}: {e}")
-
-                prog.progress((i + 1) / len(optimizers))
-
-            # ---------------- HANDLE JIKA ADA YANG KURANG ----------------
-            if missing and len(loaded) == 0:
-                st.error(f"Missing pretrained files for: {missing}. Please train & save those models first.")
-            else:
-                results = {}
-                for opt_name, obj in loaded.items():
-                    status.text(f'Preparing predictions for {opt_name}...')
-                    m = obj['model']
-                    sc = obj['scaler']
-                    meta = obj['meta']
-                    w = meta.get('window', 60)
-
-                    # recreate windows pakai scaler dari model itu
-                    X_tr, y_tr, X_v, y_v, X_te, y_te = prepare_lstm_data_with_scaler(
-                        df, sc, window=w, horizon=1
-                    )
-
-                    last_row_train = X_tr[-1, -1].copy()
-                    last_row_val = X_v[-1, -1].copy()
-
-                    data_local = df[['Open', 'High', 'Low', 'Close', 'Volume']].values.astype(float)
-                    scaled_all_local = sc.transform(data_local)
-
-                    n_local = len(scaled_all_local)
-                    tr_end = int(n_local * 0.70)
-                    v_end = int(n_local * 0.85)
-
-                    tr_scaled = scaled_all_local[:tr_end]
-                    v_scaled = scaled_all_local[tr_end:v_end]
-                    te_scaled = scaled_all_local[v_end:]
-                    test_input_local = np.concatenate([v_scaled[-60:], te_scaled], axis=0)
-                    reference_row_test_local = test_input_local[60 - 1]
-
-                    pred_train_raw = m.predict(X_tr)
-                    pred_train = inverse_close_only_multi(sc, pred_train_raw.flatten(), last_row_train)
-
-                    pred_val_raw = m.predict(X_v)
-                    pred_val = inverse_close_only_multi(sc, pred_val_raw.flatten(), last_row_val)
-
-                    pred_test_raw = m.predict(X_te)
-                    pred_test = inverse_close_only_multi(sc, pred_test_raw.flatten(), reference_row_test_local)
-
-                    true_train = inverse_close_only_multi(sc, y_tr.reshape(-1, 1).flatten(), last_row_train)
-                    true_val = inverse_close_only_multi(sc, y_v.reshape(-1, 1).flatten(), last_row_val)
-                    true_test = inverse_close_only_multi(sc, y_te.reshape(-1, 1).flatten(), reference_row_test_local)
-
-                    if len(true_test) != len(pred_test):
-                        mlen = min(len(true_test), len(pred_test))
-                        true_test = true_test[:mlen]
-                        pred_test = pred_test[:mlen]
-
-                    metrics = compute_metrics(true_test, pred_test)
-                    forecast = generate_rolling_forecast(
-                        m, sc, df, forecast_days=forecast_days_opt, window=w
-                    )
-
-                    results[opt_name] = {
-                        "pred_train": pred_train,
-                        "pred_val": pred_val,
-                        "pred_test": pred_test,
-                        "true_train": true_train,
-                        "true_val": true_val,
-                        "true_test": true_test,
-                        "metrics": metrics,
-                        "forecast": forecast,
-                        "loss": [],
-                        "val_loss": []
-                    }
-
-                st.session_state.opt_results = results
-                st.success('Loaded and compared pretrained models successfully')
-
-    # ===================== RENDER RESULTS =====================
-    if st.session_state.get("opt_results"):
-
-        res = st.session_state.opt_results
-
-        # ---------- METRICS TABLE ----------
-        mt = []
-        for k, v in res.items():
-            m = v['metrics']
-            mt.append({
-                'Optimizer': k,
-                'RMSE': m['RMSE'],
-                'MAE': m['MAE'],
-                'R2': m['R2'],
-                'MAPE': m['MAPE'],
-            })
-        metrics_df = pd.DataFrame(mt).set_index('Optimizer')
-        st.subheader("Metrics Comparison")
-        st.table(metrics_df)
-
-        # ---------- BEST OPTIMIZER ----------
-        results_dict = st.session_state.opt_results
-        best_opt = None
-        best_rmse = float("inf")
-
-        for opt_name, res_dict in results_dict.items():
-            rmse = res_dict["metrics"]["RMSE"]
-            if rmse < best_rmse:
-                best_rmse = rmse
-                best_opt = opt_name
-
-        st.markdown(f"""
-        ### 🏆 Best Optimizer Result
-
-        **Best Optimizer for {coin}:**  
-        👉 <span style='color:#00E0B8; font-size:22px; font-weight:700;'>{best_opt}</span>  
-        **Lowest RMSE:** {best_rmse:.4f}
-
-        """, unsafe_allow_html=True)
-
-        # ---------- PREDICTION COMPARISON ----------
-        df_full = download_data(coin_map[coin])
-        st.subheader("Prediction Comparison")
-
-        X_train = st.session_state.get("X_train")
-        X_val = st.session_state.get("X_val")
-        X_test = st.session_state.get("X_test")
-
-        # Safety guard: kalau somehow kosong, jangan render bawah
-        if X_train is None or X_val is None or X_test is None:
-            st.warning("Please run comparison again for this coin.")
+        if missing:
+            st.error(f"Missing pretrained models: {missing}")
             st.stop()
 
-        window = 60
-        train_len = len(X_train)
-        val_len = len(X_val)
-        test_len = len(X_test)
+        # =================================================================
+        # GENERATE PREDICTIONS FOR ALL THREE OPTIMIZERS
+        # =================================================================
+        results = {}
 
-        fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df_full.index, df_full['Close'], label='Actual', linewidth=2)
+        for opt_name, obj in loaded.items():
 
-        train_dates = df_full.index[window:window + train_len]
+            status.text(f"Preparing predictions for {opt_name}")
 
-        val_start = window + train_len
-        val_end = val_start + val_len
-        val_dates = df_full.index[val_start:val_end]
+            m = obj["model"]
+            sc = obj["scaler"]
+            meta = obj["meta"]
+            w = meta.get("window", 60)
 
-        test_start = val_end
-        test_end = test_start + test_len
-        test_dates = df_full.index[test_start:test_end]
+            # recreate windows using scaler
+            X_tr, y_tr, X_v, y_v, X_te, y_te = \
+                prepare_lstm_data_with_scaler(df, sc, window=w, horizon=1)
 
-        for k, v in res.items():
-            ax.plot(train_dates, v["pred_train"], label=f"{k} Train")
-            ax.plot(val_dates, v["pred_val"], label=f"{k} Val")
-            ax.plot(test_dates, v["pred_test"], label=f"{k} Test")
+            last_row_train = X_tr[-1,-1].copy()
+            last_row_val   = X_v[-1,-1].copy()
 
-        ax.legend()
-        st.pyplot(fig)
+            data = df[['Open','High','Low','Close','Volume']].values.astype(float)
+            scaled_all = sc.transform(data)
 
-        # ---------- ZOOM 60 DAYS ----------
-        st.subheader("Optimizer Comparison — Zoom 60 Days")
+            n = len(scaled_all)
+            train_end = int(n*0.70)
+            val_end   = int(n*0.85)
 
-        zoom_days = 60
-        df_zoom = df_full.iloc[-zoom_days:]
+            train_scaled = scaled_all[:train_end]
+            val_scaled   = scaled_all[train_end:val_end]
+            test_scaled  = scaled_all[val_end:]
 
-        figz, axz = plt.subplots(figsize=(12, 5))
-        axz.plot(df_zoom.index, df_zoom['Close'], label="Actual", linewidth=2)
+            test_input = np.concatenate([val_scaled[-60:], test_scaled], axis=0)
+            reference_row_test = test_input[59]
 
-        mask_test_zoom = (test_dates >= df_zoom.index[0])
-        colors = {"SGD": "orange", "Adam": "cyan", "RMSProp": "magenta"}
+            # Predictions
+            pred_train_raw = m.predict(X_tr)
+            pred_val_raw   = m.predict(X_v)
+            pred_test_raw  = m.predict(X_te)
 
-        for opt_name, v in res.items():
-            axz.plot(
-                test_dates[mask_test_zoom],
-                v["pred_test"][mask_test_zoom],
-                label=f"{opt_name} Test",
-                linewidth=2,
-                color=colors[opt_name]
+            pred_train = inverse_close_only_multi(sc, pred_train_raw.flatten(), last_row_train)
+            pred_val   = inverse_close_only_multi(sc, pred_val_raw.flatten(), last_row_val)
+            pred_test  = inverse_close_only_multi(sc, pred_test_raw.flatten(), reference_row_test)
+
+            true_train = inverse_close_only_multi(sc, y_tr.flatten(), last_row_train)
+            true_val   = inverse_close_only_multi(sc, y_v.flatten(), last_row_val)
+            true_test  = inverse_close_only_multi(sc, y_te.flatten(), reference_row_test)
+
+            if len(true_test) != len(pred_test):
+                mlen = min(len(true_test), len(pred_test))
+                true_test = true_test[:mlen]
+                pred_test = pred_test[:mlen]
+
+            metrics = compute_metrics(true_test, pred_test)
+
+            forecast = generate_rolling_forecast(
+                m, sc, df, forecast_days=forecast_days_opt, window=w
             )
 
-        axz.set_title("Optimizer Comparison — Zoomed Test Prediction (Last 60 days)")
-        axz.legend()
-        st.pyplot(figz)
+            results[opt_name] = {
+                "pred_train": pred_train,
+                "pred_val": pred_val,
+                "pred_test": pred_test,
+                "true_train": true_train,
+                "true_val": true_val,
+                "true_test": true_test,
+                "metrics": metrics,
+                "forecast": forecast
+            }
 
-        # ---------- ZOOM + FORECAST ----------
-        st.subheader("Optimizer Comparison — Zoomed Test Prediction + Forecast (Last 60 days)")
+        st.session_state.opt_results = results
+        st.session_state.comparison_done = True
+        st.success("Comparison completed!")
 
-        fig4, ax4 = plt.subplots(figsize=(12, 5))
-        ax4.plot(df_zoom.index, df_zoom['Close'], label='Actual', linewidth=2, color='lightblue')
 
-        for opt_name, v in res.items():
-            mask_zoom = (test_dates >= df_zoom.index[0])
-            zoom_pred = v["pred_test"][mask_zoom]
-            zoom_dates = test_dates[mask_zoom]
+    # =================================================================
+    # RENDER RESULTS (SAFE MODE — NO ERROR EVER)
+    # =================================================================
+    opt_res = st.session_state.get("opt_results")
+    X_train = st.session_state.get("X_train")
+    X_val   = st.session_state.get("X_val")
+    X_test  = st.session_state.get("X_test")
 
-            ax4.plot(
-                zoom_dates,
-                zoom_pred,
-                label=f"{opt_name} Test",
-                linewidth=2,
-                color=colors[opt_name]
-            )
+    results_ready = (
+        st.session_state.get("comparison_done") and
+        opt_res is not None and
+        X_train is not None and
+        X_val   is not None and
+        X_test  is not None and
+        hasattr(X_train, "__len__") and
+        hasattr(X_val, "__len__") and
+        hasattr(X_test, "__len__")
+    )
 
-        last_actual_date = df_full.index[-1]
-        future_dates = pd.date_range(
-            start=last_actual_date,
-            periods=forecast_days_opt + 1
-        )[1:]
+    if not results_ready:
+        st.stop()
 
-        for opt_name, v in res.items():
-            forecast = v["forecast"]
-            mlen = min(len(future_dates), len(forecast))
-            plot_dates = future_dates[:mlen]
-            plot_forecast = forecast[:mlen]
+    # USE RESULTS SAFELY
+    res = opt_res
 
-            ax4.plot(
-                plot_dates,
-                plot_forecast,
-                linestyle='dashed',
-                linewidth=2.5,
-                color=colors[opt_name],
-                label=f"{opt_name} Forecast"
-            )
+    # ========================== METRICS TABLE ==========================
+    st.subheader("Metrics Comparison")
 
-        ax4.set_title("Optimizer Comparison — Zoomed Test Prediction (Last 60 days) + Forecast")
-        ax4.legend()
-        st.pyplot(fig4)
+    mt = []
+    for k, v in res.items():
+        m = v["metrics"]
+        mt.append({
+            "Optimizer": k,
+            "RMSE": m["RMSE"],
+            "MAE":  m["MAE"],
+            "R2":   m["R2"],
+            "MAPE": m["MAPE"]
+        })
+
+    metrics_df = pd.DataFrame(mt).set_index("Optimizer")
+    st.table(metrics_df)
+
+    # BEST OPTIMIZER BY RMSE
+    best_opt = min(res, key=lambda x: res[x]["metrics"]["RMSE"])
+    best_rmse = res[best_opt]["metrics"]["RMSE"]
+
+    st.markdown(f"""
+    ### 🏆 Best Optimizer:  
+    <span style='color:#00E0B8; font-size:22px; font-weight:700;'>{best_opt}</span>  
+    **Lowest RMSE:** {best_rmse:.4f}
+    """, unsafe_allow_html=True)
+
+    # ========================== PLOTTING ==========================
+    df_full = download_data(coin_map[coin])
+
+    st.subheader("Prediction Comparison")
+
+    fig, ax = plt.subplots(figsize=(12,5))
+    ax.plot(df_full.index, df_full["Close"], label="Actual", linewidth=2)
+
+    window = 60
+    train_len = len(X_train)
+    val_len   = len(X_val)
+    test_len  = len(X_test)
+
+    train_dates = df_full.index[window : window+train_len]
+    val_start = window + train_len
+    val_end   = val_start + val_len
+    val_dates = df_full.index[val_start:val_end]
+    test_start = val_end
+    test_end   = test_start + test_len
+    test_dates = df_full.index[test_start:test_end]
+
+    for opt_name, v in res.items():
+        ax.plot(train_dates, v["pred_train"], label=f"{opt_name} Train")
+        ax.plot(val_dates,   v["pred_val"],   label=f"{opt_name} Val")
+        ax.plot(test_dates,  v["pred_test"],  label=f"{opt_name} Test")
+
+    ax.legend()
+    st.pyplot(fig)
+
+    # ========================== ZOOM 60 DAYS ==========================
+    st.subheader("Optimizer Comparison — Zoom 60 Days")
+
+    zoom_days = 60
+    df_zoom = df_full.iloc[-zoom_days:]
+
+    figz, axz = plt.subplots(figsize=(12,5))
+    axz.plot(df_zoom.index, df_zoom["Close"], label="Actual", linewidth=2)
+
+    for opt_name, v in res.items():
+        mask = (test_dates >= df_zoom.index[0])
+        axz.plot(test_dates[mask], v["pred_test"][mask],
+                 label=f"{opt_name} Test", linewidth=2)
+
+    axz.legend()
+    st.pyplot(figz)
+
+    # ========================== ZOOM + FORECAST ==========================
+    st.subheader("Optimizer Comparison — Zoomed + Forecast (Last 60 Days)")
+
+    fig4, ax4 = plt.subplots(figsize=(12,5))
+    ax4.plot(df_zoom.index, df_zoom["Close"], label="Actual", linewidth=2)
+
+    for opt_name, v in res.items():
+        mask = (test_dates >= df_zoom.index[0])
+        ax4.plot(test_dates[mask], v["pred_test"][mask],
+                 label=f"{opt_name} Test", linewidth=2)
+
+    # forecast overlay
+    future_dates = pd.date_range(df_full.index[-1], periods=forecast_days_opt+1)[1:]
+
+    for opt_name, v in res.items():
+        m = min(len(future_dates), len(v["forecast"]))
+        ax4.plot(
+            future_dates[:m],
+            v["forecast"][:m],
+            linestyle='dashed',
+            linewidth=2.5,
+            label=f"{opt_name} Forecast"
+        )
+
+    ax4.legend()
+    st.pyplot(fig4)
+
 
 
 
@@ -1415,6 +1389,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
