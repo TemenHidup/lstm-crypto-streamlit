@@ -1029,74 +1029,7 @@ elif page == 'Comparison':
             prog = st.progress(0)
             status = st.empty()
 
-            # if mode == 'Train New Models':
-            #     for i, opt_name in enumerate(optimizers):
-            #         status.text(f"Training with {opt_name}")
-
-            #         # build & compile fresh model per optimizer (single-step for fair comparison)
-            #         model = build_model((X_train.shape[1], X_train.shape[2]), horizon=1)
-            #         model.compile(optimizer=get_optimizer(opt_name), loss='mean_squared_error')
-
-            #         # per-optimizer history lists
-            #         train_losses = []
-            #         val_losses = []
-
-            #         for e in range(epochs_opt):
-            #             h = model.fit(
-            #                 X_train, y_train,
-            #                 epochs=1,
-            #                 batch_size=32,
-            #                 validation_data=(X_val, y_val),
-            #                 verbose=0
-            #             )
-            #             train_losses.append(h.history['loss'][0])
-            #             val_losses.append(h.history['val_loss'][0])
-
-            #             overall_progress = (i + (e+1)/epochs_opt) / len(optimizers)
-            #             prog.progress(min(1.0, overall_progress))
-            #             status.text(f"Training {opt_name}... epoch {e+1}/{epochs_opt}")
-
-            #         # ---------------- collect preds and inverse (use correct reference rows) ----------------
-            #         pred_train_raw = model.predict(X_train)
-            #         pred_train = inverse_close_only_multi(scaler, pred_train_raw.flatten(), last_row_train)
-
-            #         pred_val_raw = model.predict(X_val)
-            #         pred_val = inverse_close_only_multi(scaler, pred_val_raw.flatten(), last_row_val)
-
-            #         pred_test_raw = model.predict(X_test)
-            #         pred_test = inverse_close_only_multi(scaler, pred_test_raw.flatten(), reference_row_test)
-
-            #         true_train = inverse_close_only_multi(scaler, y_train.reshape(-1,1).flatten(), last_row_train)
-            #         true_val   = inverse_close_only_multi(scaler, y_val.reshape(-1,1).flatten(), last_row_val)
-            #         true_test  = inverse_close_only_multi(scaler, y_test.reshape(-1,1).flatten(), reference_row_test)
-
-            #         if len(true_test) != len(pred_test):
-            #             st.warning(f"Length mismatch (true_test {len(true_test)} vs pred_test {len(pred_test)}) for optimizer {opt_name}. Trimming to min length.")
-            #             m = min(len(true_test), len(pred_test))
-            #             true_test = true_test[:m]
-            #             pred_test = pred_test[:m]
-
-            #         metrics = compute_metrics(true_test, pred_test)
-
-            #         forecast = generate_rolling_forecast(model, scaler, df, forecast_days=forecast_days_opt, window=60)
-
-            #         results[opt_name] = {
-            #             "pred_train": pred_train,
-            #             "pred_val": pred_val,
-            #             "pred_test": pred_test,
-            #             "true_train": true_train,
-            #             "true_val": true_val,
-            #             "true_test": true_test,
-            #             "metrics": metrics,
-            #             "forecast": forecast,
-            #             "loss": train_losses,
-            #             "val_loss": val_losses
-            #         }
-
-            #     st.session_state.opt_results = results
-            #     st.success("Optimizer Comparison Completed!")
-
-            
+        
                 # Mode: Compare Pretrained Models
                 # We'll attempt to load three pretrained models for the selected coin
             missing = []
@@ -1104,21 +1037,28 @@ elif page == 'Comparison':
             for opt_name in optimizers:
                 short = coin_short[coin]
                 base = f"{short}_{opt_name}"
-                model_path = os.path.join('saved_models', base + '.h5')
-                scaler_path = os.path.join('saved_models', base + '_scaler.pkl')
-                meta_path = os.path.join('saved_models', base + '_meta.json')
-                if not os.path.exists(model_path) or not os.path.exists(scaler_path) or not os.path.exists(meta_path):
+            
+                model_path = f"saved_models/{base}.keras"
+                scaler_path = f"saved_models/{short}_scaler.pkl"
+                meta_path   = f"saved_models/{short}_meta.json"
+            
+                if not (os.path.exists(model_path) and 
+                        os.path.exists(scaler_path) and 
+                        os.path.exists(meta_path)):
                     missing.append(base)
                 else:
                     try:
-                        m = load_model(model_path)
-                        with open(scaler_path, 'rb') as f:
+                        m = load_model(model_path, compile=False)   # <-- WAJIB
+                        with open(scaler_path, "rb") as f:
                             sc = pickle.load(f)
-                        with open(meta_path, 'r') as f:
+                        with open(meta_path, "r") as f:
                             meta = json.load(f)
-                        loaded[opt_name] = {'model': m, 'scaler': sc, 'meta': meta}
+            
+                        loaded[opt_name] = {"model": m, "scaler": sc, "meta": meta}
+            
                     except Exception as e:
-                        st.error(f'Failed to load {base}: {e}')
+                        st.error(f"Failed to load {base}: {e}")
+
 
                 if missing:
                     st.error(f'Missing pretrained files for: {missing}. Please train & save those models first.')
@@ -1362,4 +1302,5 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
