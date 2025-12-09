@@ -808,35 +808,62 @@ if page == 'Prediction':
 
         # LOAD MODEL (tanpa dropdown tambahan)
         if st.button('Load Model'):
-            short = coin_short[coin]
 
+            # =====================================================
+            # RESET SESSION STATE — WAJIB supaya tidak crash
+            # =====================================================
+            keys_to_clear = [
+                "model", "scaler", "meta",
+                "X_train", "y_train",
+                "X_val", "y_val",
+                "X_test", "y_test",
+                "window", "horizon",
+                "fig1", "fig2"
+            ]
+            for k in keys_to_clear:
+                st.session_state[k] = None
+        
+            # =====================================================
+            # LOAD MODEL + SCALER + META
+            # =====================================================
+            short = coin_short[coin]
+        
             try:
                 m, sc, meta = load_model_files(short, optimizer)
             except FileNotFoundError as e:
                 st.error(str(e))
-            else:
-                df = download_data(coin_map[coin])
-
-                # Window & horizon dari pretrained metadata
-                w = meta.get('window', 60)
-                h = meta.get('horizon', 1)
-
-                X_train, y_train, X_val, y_val, X_test, y_test = prepare_lstm_data_with_scaler(
-                    df, sc, window=w, horizon=h
-                )
-
-                st.session_state.model = m
-                st.session_state.scaler = sc
-                st.session_state.X_train = X_train
-                st.session_state.y_train = y_train
-                st.session_state.X_val = X_val
-                st.session_state.y_val = y_val
-                st.session_state.X_test = X_test
-                st.session_state.y_test = y_test
-                st.session_state.window = w
-                st.session_state.horizon = h
-
-                st.success(f"Loaded pretrained model: {short}_{optimizer}.h5 (window={w}, horizon={h})")
+                st.stop()
+            except Exception as e:
+                st.error(f"Failed to load model: {e}")
+                st.stop()
+        
+            # =====================================================
+            # PREPARE FRESH DATASETS (MENCEGAH SHAPE MISMATCH)
+            # =====================================================
+            df = download_data(coin_map[coin])
+            w = meta.get('window', 60)
+            h = meta.get('horizon', 1)
+        
+            X_train, y_train, X_val, y_val, X_test, y_test = prepare_lstm_data_with_scaler(
+                df, sc, window=w, horizon=h
+            )
+        
+            # =====================================================
+            # SAVE INTO SESSION_STATE
+            # =====================================================
+            st.session_state.model = m
+            st.session_state.scaler = sc
+            st.session_state.X_train = X_train
+            st.session_state.y_train = y_train
+            st.session_state.X_val = X_val
+            st.session_state.y_val = y_val
+            st.session_state.X_test = X_test
+            st.session_state.y_test = y_test
+            st.session_state.window = w
+            st.session_state.horizon = h
+        
+            st.success(f"Loaded pretrained model: {short}_{optimizer}.keras (window={w}, horizon={h})")
+        
 
         # SHOW PLOT
         if st.button('Show Plot'):
@@ -1380,6 +1407,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
