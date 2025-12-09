@@ -883,6 +883,24 @@ if page == 'Prediction':
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # ===================== SAFETY CHECK FOR PREDICTION PAGE =====================
+
+        # Cek apakah model sudah di-load
+        if "model" not in st.session_state or st.session_state.model is None:
+            st.warning("⚠ Model not loaded. Please load a pretrained model first.")
+            st.stop()
+        
+        # Cek apakah X_test ada
+        if "X_test" not in st.session_state or st.session_state.X_test is None:
+            st.warning("⚠ Test data not ready. Please load a pretrained model first.")
+            st.stop()
+        
+        # Cek scaler
+        if "scaler" not in st.session_state or st.session_state.scaler is None:
+            st.warning("⚠ Scaler missing. Please load a pretrained model first.")
+            st.stop()
+
+        
         df = download_data(coin_map[coin])
         st.dataframe(df)
 
@@ -1302,5 +1320,6 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
