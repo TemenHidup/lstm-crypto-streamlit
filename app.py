@@ -1069,9 +1069,6 @@ elif page == 'Comparison':
 
     with col1:
         coin = st.selectbox('Choose Coin', list(coin_map.keys()), key='coc')
-        # mode = st.selectbox('Comparison Mode', ['Train New Models', 'Compare Pretrained Models']) 
-        # epochs_opt = st.slider('Epochs per optimizer', min_value=10, max_value=150, value=50, step=10)
-        # Allow user to set forecast days here too
         forecast_days_opt = st.slider('Forecast days for comparison', min_value=1, max_value=14, value=7, step=1)
         run_btn = st.button('Compare Models')
 
@@ -1084,85 +1081,121 @@ elif page == 'Comparison':
         st.markdown('</div>', unsafe_allow_html=True)
 
         if run_btn:
+
+            # =====================================================
+            # RESET SEMUA SESSION STATE — WAJIB untuk hindari crash
+            # =====================================================
+            keys_to_clear = [
+                "model", "scaler", "meta",
+                "X_train", "y_train",
+                "X_val", "y_val",
+                "X_test", "y_test",
+                "window", "horizon",
+                "fig1", "fig2"
+            ]
+            for k in keys_to_clear:
+                st.session_state[k] = None
+        
             st.session_state.opt_results = {}
             df = download_data(coin_map[coin])
-
-            # ---- ALWAYS re-preprocess fresh for optimizer comparison (single-step) ----
+        
+            # ---- Preprocess fresh for optimizer comparison (horizon=1) ----
             X_train, y_train, X_val, y_val, X_test, y_test, scaler = prepare_lstm_data(df, window=60, horizon=1)
-
-            # store into session_state (optional, keep consistent)
+        
+            # store into session_state (optional)
             st.session_state.X_train = X_train
             st.session_state.y_train = y_train
             st.session_state.X_val = X_val
             st.session_state.y_val = y_val
             st.session_state.X_test = X_test
             st.session_state.y_test = y_test
-            st.session_state.scaler = scaler
-
+            st.session_state.scaler  = scaler
+        
             st.success("Preprocessed for optimizer comparison (horizon=1).")
-
-            # local aliases
+        
             X_train = st.session_state.X_train
             y_train = st.session_state.y_train
             X_val   = st.session_state.X_val
             y_val   = st.session_state.y_val
             X_test  = st.session_state.X_test
             y_test  = st.session_state.y_test
-
             scaler  = st.session_state.scaler
-
-            # references for inverse transform: use the last row of the last *window* used for that split
-            last_row_train = X_train[-1, -1].copy()  # last row of last train-window
-            last_row_val   = X_val[-1, -1].copy()    # last row of last val-window
-
-            # For test, we must reconstruct the exact test_input used in windowing and pick the row
+        
+            # ---- Prepare reference rows ----
+            last_row_train = X_train[-1, -1].copy()
+            last_row_val   = X_val[-1, -1].copy()
+        
             features = ['Open','High','Low','Close','Volume']
             data = df[features].values.astype(float)
             scaled_all = scaler.transform(data)
+        
             n = len(scaled_all)
             train_end = int(n * 0.70)
             val_end   = int(n * 0.85)
+        
             train_scaled = scaled_all[:train_end]
             val_scaled   = scaled_all[train_end:val_end]
             test_scaled  = scaled_all[val_end:]
+        
             test_input = np.concatenate([val_scaled[-60:], test_scaled], axis=0)
-            reference_row_test = test_input[60 - 1]  # last row of the first window used for test
-
-            results = {}
+            reference_row_test = test_input[60 - 1]
+        
+            # ---- Load pretrained models ----
             optimizers = ["SGD", "Adam", "RMSProp"]
-
+            loaded = {}
+            missing = []
+        
             prog = st.progress(0)
             status = st.empty()
-
         
-                # Mode: Compare Pretrained Models
-                # We'll attempt to load three pretrained models for the selected coin
-            missing = []
-            loaded = {}
-            for opt_name in optimizers:
+            for i, opt_name in enumerate(optimizers):
                 short = coin_short[coin]
                 base = f"{short}_{opt_name}"
-            
+        
                 model_path = f"saved_models/{base}.keras"
                 scaler_path = f"saved_models/{short}_scaler.pkl"
                 meta_path   = f"saved_models/{short}_meta.json"
-            
+        
                 if not (os.path.exists(model_path) and 
                         os.path.exists(scaler_path) and 
                         os.path.exists(meta_path)):
                     missing.append(base)
-                else:
-                    try:
-                        m = load_model(model_path, compile=False)   # <-- WAJIB
-                        with open(scaler_path, "rb") as f:
-                            sc = pickle.load(f)
-                        with open(meta_path, "r") as f:
-                            meta = json.load(f)
-            
-                        loaded[opt_name] = {"model": m, "scaler": sc, "meta": meta}
-            
-                    except Exception as e:
-                        st.error(f"Failed to load {base}: {e}")
+                    continue
+        
+                try:
+                    # -------------------------------
+                    # LOAD MODEL (compile=False)
+                    # -------------------------------
+                    m = load_model(model_path, compile=False)
+        
+                    # -------------------------------
+                    # FORCE BUILD MODEL (Anti-crash)
+                    # -------------------------------
+                    with open(meta_path, "r") as f:
+                        meta_preview = json.load(f)
+        
+                    dummy = tf.zeros((1, meta_preview["window"], 5))
+                    m.predict(dummy)   # WAJIB
+        
+                    # -------------------------------
+                    # LOAD SCALER + META
+                    # -------------------------------
+                    with open(scaler_path, "rb") as f:
+                        sc_loaded = pickle.load(f)
+                    with open(meta_path, "r") as f:
+                        meta_loaded = json.load(f)
+        
+                    loaded[opt_name] = {
+                        "model": m,
+                        "scaler": sc_loaded,
+                        "meta": meta_loaded
+                    }
+        
+                except Exception as e:
+                    st.error(f"Failed to load {base}: {e}")
+        
+                prog.progress((i + 1) / len(optimizers))
+
 
 
                 if missing:
@@ -1407,6 +1440,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
