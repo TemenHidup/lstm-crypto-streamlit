@@ -448,19 +448,12 @@ def save_model_files(model, scaler, coin_short_name, optimizer_name, window, hor
     return model_path, scaler_path, meta_path
 
 
-def load_model_files(coin_short_name, optimizer_name):
-    base = f"{coin_short_name}_{optimizer_name}"
-    model_path = os.path.join("saved_models", base + ".h5")
-    scaler_path = os.path.join("saved_models", base + "_scaler.pkl")
-    meta_path = os.path.join("saved_models", base + "_meta.json")
-
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found: {model_path}")
+def load_model_files(coin, optimizer):
+    model_path = f"saved_models/{coin}_{optimizer}.keras"
+    scaler_path = f"saved_models/{coin}_scaler.pkl"
+    meta_path   = f"saved_models/{coin}_meta.json"
 
     model = load_model(model_path)
-
-    if not os.path.exists(scaler_path) or not os.path.exists(meta_path):
-        raise FileNotFoundError("Scaler or metadata missing for pretrained model")
 
     with open(scaler_path, 'rb') as f:
         scaler = pickle.load(f)
@@ -469,6 +462,7 @@ def load_model_files(coin_short_name, optimizer_name):
         meta = json.load(f)
 
     return model, scaler, meta
+
 
 
 # ============================================
@@ -1366,4 +1360,5 @@ elif page == 'Comparison':
 # ============================================================
 # CLOSE MAIN CARD
 # ============================================================
+
 st.markdown("</div>", unsafe_allow_html=True)
