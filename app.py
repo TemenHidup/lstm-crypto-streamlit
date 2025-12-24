@@ -27,6 +27,36 @@ from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 # ============================================
 st.set_page_config(page_title="Cryptocurrency Forecast Dashboard", layout="wide")
 
+st.markdown("""
+<style>
+/* =================================
+   FORCE DARK MODE — APP.PY ONLY
+   (NO COLOR CHANGE)
+   ================================= */
+
+:root {
+    color-scheme: dark !important;
+}
+
+/* Lock Streamlit base containers */
+html, body, .stApp,
+[data-testid="stAppViewContainer"] {
+    background-color: #0b0f14 !important;
+}
+
+/* Prevent Streamlit header light background */
+[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
+/* Sidebar stays dark (keeps your existing CSS dominant) */
+section[data-testid="stSidebar"] {
+    background-color: #0b0f14 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # ensure saved_models folder exists
 if not os.path.exists("saved_models"):
     os.makedirs("saved_models")
@@ -1389,6 +1419,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
