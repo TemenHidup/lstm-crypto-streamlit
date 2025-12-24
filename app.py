@@ -25,7 +25,7 @@ from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 # ============================================
 # CONFIG & THEME (Clean Dark Mode)
 # ============================================
-st.set_page_config(page_title="Cryptocurrency Dashboard", layout="wide")
+st.set_page_config(page_title="Cryptocurrency Forecast Dashboard", layout="wide")
 
 # ensure saved_models folder exists
 if not os.path.exists("saved_models"):
@@ -1389,6 +1389,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
