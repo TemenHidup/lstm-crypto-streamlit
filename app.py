@@ -548,7 +548,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # Top Dashboard Header
 st.markdown("""
 <div class="section-header">
-    <h2 class='title'>Cryptocurrency Dashboard</h2>
+    <h2 class='title'>Cryptocurrency Forercast Dashboard</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1389,6 +1389,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
