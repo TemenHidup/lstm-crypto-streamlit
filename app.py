@@ -27,34 +27,34 @@ from tensorflow.keras.optimizers import Adam, RMSprop, SGD
 # ============================================
 st.set_page_config(page_title="Cryptocurrency Forecast Dashboard", layout="wide")
 
-st.markdown("""
-<style>
-/* =================================
-   FORCE DARK MODE — APP.PY ONLY
-   (NO COLOR CHANGE)
-   ================================= */
+# st.markdown("""
+# <style>
+# /* =================================
+#    FORCE DARK MODE — APP.PY ONLY
+#    (NO COLOR CHANGE)
+#    ================================= */
 
-:root {
-    color-scheme: dark !important;
-}
+# :root {
+#     color-scheme: dark !important;
+# }
 
-/* Lock Streamlit base containers */
-html, body, .stApp,
-[data-testid="stAppViewContainer"] {
-    background-color: #0b0f14 !important;
-}
+# /* Lock Streamlit base containers */
+# html, body, .stApp,
+# [data-testid="stAppViewContainer"] {
+#     background-color: #0b0f14 !important;
+# }
 
-/* Prevent Streamlit header light background */
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
+# /* Prevent Streamlit header light background */
+# [data-testid="stHeader"] {
+#     background: transparent !important;
+# }
 
-/* Sidebar stays dark (keeps your existing CSS dominant) */
-section[data-testid="stSidebar"] {
-    background-color: #0b0f14 !important;
-}
-</style>
-""", unsafe_allow_html=True)
+# /* Sidebar stays dark (keeps your existing CSS dominant) */
+# section[data-testid="stSidebar"] {
+#     background-color: #0b0f14 !important;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 
 # ensure saved_models folder exists
@@ -726,80 +726,80 @@ def historical_page():
     # ===============================
     # PLOT 1 — 3 CANDLESTICK CHARTS
     # ===============================
-    st.markdown("### 🕯 Candlestick Charts")
+    # st.markdown("### 🕯 Candlestick Charts")
 
-    coins_to_plot = ["Bitcoin", "Ethereum", "BNB"]
-    colors = {"Bitcoin": {"inc": "#00E0B8", "dec": "#EF476F"},
-              "Ethereum": {"inc": "#FFD166", "dec": "#EF476F"},
-              "BNB": {"inc": "#2A9D8F", "dec": "#EF476F"}}
+    # coins_to_plot = ["Bitcoin", "Ethereum", "BNB"]
+    # colors = {"Bitcoin": {"inc": "#00E0B8", "dec": "#EF476F"},
+    #           "Ethereum": {"inc": "#FFD166", "dec": "#EF476F"},
+    #           "BNB": {"inc": "#2A9D8F", "dec": "#EF476F"}}
 
-    for coin_choice in coins_to_plot:
-        df = df_map[coin_choice]
-        symbol = coin_choice
+    # for coin_choice in coins_to_plot:
+    #     df = df_map[coin_choice]
+    #     symbol = coin_choice
         
-        st.markdown(f"#### {symbol} Candlestick Chart")
+    #     st.markdown(f"#### {symbol} Candlestick Chart")
 
-        fig_candle = go.Figure(data=[
-            go.Candlestick(
-                x=df.index,
-                open=safe_series(df["Open"]),
-                high=safe_series(df["High"]),
-                low=safe_series(df["Low"]),
-                close=safe_series(df["Close"]),
-                increasing_line_color=colors[coin_choice]["inc"],
-                decreasing_line_color=colors[coin_choice]["dec"],
-                name=symbol
-            )
-        ])
+    #     fig_candle = go.Figure(data=[
+    #         go.Candlestick(
+    #             x=df.index,
+    #             open=safe_series(df["Open"]),
+    #             high=safe_series(df["High"]),
+    #             low=safe_series(df["Low"]),
+    #             close=safe_series(df["Close"]),
+    #             increasing_line_color=colors[coin_choice]["inc"],
+    #             decreasing_line_color=colors[coin_choice]["dec"],
+    #             name=symbol
+    #         )
+    #     ])
 
-        fig_candle.update_layout(
-            template="plotly_dark",
-            height=400,
-            margin=dict(l=20, r=20, t=40, b=20),
-            xaxis_title="Date",
-            yaxis_title="Price (USD)"
-        )
-        # Hides range slider and default range buttons to keep the chart clean
-        fig_candle.update_xaxes(rangeslider_visible=True)
+    #     fig_candle.update_layout(
+    #         template="plotly_dark",
+    #         height=400,
+    #         margin=dict(l=20, r=20, t=40, b=20),
+    #         xaxis_title="Date",
+    #         yaxis_title="Price (USD)"
+    #     )
+    #     # Hides range slider and default range buttons to keep the chart clean
+    #     fig_candle.update_xaxes(rangeslider_visible=True)
 
-        st.plotly_chart(fig_candle, use_container_width=True)
+    #     st.plotly_chart(fig_candle, use_container_width=True)
 
-    # --- Horizontal Rule to separate plots ---
-    st.markdown("---")
+    # # --- Horizontal Rule to separate plots ---
+    # st.markdown("---")
 
-    # ===============================
-    # PLOT 2 — INTERACTIVE LINE CHART (1D ONLY)
-    # ===============================
-    st.markdown("### 📈 Close Price Trend")
+    # # ===============================
+    # # PLOT 2 — INTERACTIVE LINE CHART (1D ONLY)
+    # # ===============================
+    # st.markdown("### 📈 Close Price Trend")
 
-    # Dropdown for selecting the coin for the line graph
-    coin_choice_line = st.selectbox("Select coin to view Close Price trend", 
-                                    ["Bitcoin","Ethereum","BNB"], 
-                                    key="line_select")
+    # # Dropdown for selecting the coin for the line graph
+    # coin_choice_line = st.selectbox("Select coin to view Close Price trend", 
+    #                                 ["Bitcoin","Ethereum","BNB"], 
+    #                                 key="line_select")
 
-    df_selected = df_map[coin_choice_line]
-    symbol_line = coin_choice_line
+    # df_selected = df_map[coin_choice_line]
+    # symbol_line = coin_choice_line
     
-    # Define a color for the selected line
-    line_color_map = {"Bitcoin": "#00E0B8", "Ethereum": "#FFD166", "BNB": "#2A9D8F"}
+    # # Define a color for the selected line
+    # line_color_map = {"Bitcoin": "#00E0B8", "Ethereum": "#FFD166", "BNB": "#2A9D8F"}
     
-    fig_line = go.Figure()
-    fig_line.add_trace(go.Scatter(
-        x=df_selected.index,
-        y=safe_series(df_selected["Close"]),
-        name=symbol_line,
-        mode="lines",
-        line=dict(width=2, color=line_color_map[coin_choice_line])
-    ))
+    # fig_line = go.Figure()
+    # fig_line.add_trace(go.Scatter(
+    #     x=df_selected.index,
+    #     y=safe_series(df_selected["Close"]),
+    #     name=symbol_line,
+    #     mode="lines",
+    #     line=dict(width=2, color=line_color_map[coin_choice_line])
+    # ))
 
-    fig_line.update_layout(
-        title=f"{symbol_line} Close Price History",
-        template="plotly_dark",
-        height=400,
-        margin=dict(l=20, r=20, t=40, b=20),
-        xaxis_title="Date",
-        yaxis_title="Close Price (USD)"
-    )
+    # fig_line.update_layout(
+    #     title=f"{symbol_line} Close Price History",
+    #     template="plotly_dark",
+    #     height=400,
+    #     margin=dict(l=20, r=20, t=40, b=20),
+    #     xaxis_title="Date",
+    #     yaxis_title="Close Price (USD)"
+    # )
 
     st.plotly_chart(fig_line, use_container_width=True)
 
@@ -1419,6 +1419,7 @@ elif page == 'Comparison':
 # ============================================================
 
 st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 
